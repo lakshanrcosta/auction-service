@@ -1,14 +1,50 @@
 service: auction-service
-frameworkVersion: '3'
+frameworkVersion: "3"
 
 provider:
   name: aws
   runtime: nodejs18.x
+  memorySize: 256
+  stage: ${opt:stage, 'dev'}
+  region: eu-north-1
+  environment:
+    DYNAMODB_TABLE_NAME: ${self:custom.auctionsTable}
+
+custom:
+  auctionsTable: auctions-table-${self:provider.stage}
+
+plugins:
+  - serverless-iam-roles-per-function
 
 functions:
-  api:
-    handler: index.handler
+  createAuction:
+    handler: src/handlers/createAuction.handler
+    name: create-auction
+    memorySize: 128
+    timeout: 5
     events:
-      - httpApi:
-          path: /
-          method: get
+      - http:
+          method: POST
+          path: /auction
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - "dynamodb:PutItem"
+        Resource:
+          - !GetAtt AuctionsTable.Arn
+
+resources:
+  Resources:
+    AuctionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.auctionsTable}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
